@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synapse — AI terms drill</title>
+<style>
+  :root {
+    --bg: #0b0d14; --panel: #141824; --edge: #232838;
+    --text: #e8eaf0; --dim: #7c86a0; --accent: #7fd4ff;
+    --good: #4fd1a5; --bad: #ff7b7b; --gold: #ffd479;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 0 16px 40px;
+  }
+  .wrap { width: 100%; max-width: 760px; }
+
+  header {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: 18px 0 14px;
+  }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  h1 span { color: var(--accent); }
+  header .sub { color: var(--dim); font-size: 12.5px; }
+  header .spacer { flex: 1; }
+  .iconbtn {
+    background: transparent; border: 1px solid var(--edge); color: var(--dim);
+    border-radius: 6px; font-size: 11.5px; padding: 5px 9px; cursor: pointer;
+  }
+  .iconbtn:hover { color: var(--text); border-color: var(--dim); }
+
+  /* ---- progress strip ---- */
+  .meters { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+  .bar { flex: 1; height: 8px; background: var(--panel); border-radius: 99px; overflow: hidden; border: 1px solid var(--edge); }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--good)); transition: width .35s ease; }
+  .stat { font-size: 12px; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .stat b { color: var(--text); font-weight: 600; }
+  .stat.hot b { color: var(--gold); }
+
+  /* ---- card ---- */
+  .card {
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 12px;
+    padding: 20px; margin-top: 14px;
+  }
+  .kind { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); margin-bottom: 12px; }
+  .prompt { font-size: 20px; line-height: 1.4; margin: 0 0 4px; }
+  .prompt.small { font-size: 16.5px; }
+  .prompt em { color: var(--accent); font-style: normal; font-weight: 600; }
+  .hint { color: var(--dim); font-size: 12.5px; margin-top: 8px; }
+
+  .opts { display: grid; gap: 8px; margin-top: 18px; }
+  .opt {
+    display: flex; gap: 11px; align-items: flex-start; text-align: left;
+    background: transparent; border: 1px solid var(--edge); color: var(--text);
+    border-radius: 9px; padding: 12px 13px; font: inherit; font-size: 14.5px;
+    cursor: pointer; transition: border-color .12s, background .12s;
+  }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: #1a1f2e; }
+  .opt .num {
+    flex: 0 0 20px; height: 20px; border-radius: 5px; background: var(--edge);
+    color: var(--dim); font-size: 11.5px; display: grid; place-items: center; margin-top: 1px;
+  }
+  .opt.right { border-color: var(--good); background: #12241f; }
+  .opt.right .num { background: var(--good); color: #06221a; }
+  .opt.wrong { border-color: var(--bad); background: #261618; }
+  .opt.wrong .num { background: var(--bad); color: #2b0d0f; }
+  .opt:disabled { cursor: default; opacity: .95; }
+
+  input[type=text] {
+    width: 100%; margin-top: 16px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--edge); border-radius: 9px; padding: 12px 13px;
+    font: inherit; font-size: 15px;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+
+  /* ---- feedback ---- */
+  .fb { margin-top: 16px; border-top: 1px solid var(--edge); padding-top: 15px; display: none; }
+  .fb.show { display: block; }
+  .verdict { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .verdict.ok { color: var(--good); }
+  .verdict.no { color: var(--bad); }
+  .fb .lbl { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); margin: 12px 0 4px; }
+  .fb .body { font-size: 14px; line-height: 1.55; }
+  .fb .body.pic { color: var(--accent); }
+  .next {
+    margin-top: 18px; background: var(--accent); color: #06101c; border: 0;
+    border-radius: 8px; padding: 11px 20px; font: inherit; font-weight: 600;
+    font-size: 14px; cursor: pointer;
+  }
+  .next:hover { filter: brightness(1.08); }
+
+  /* ---- done screen ---- */
+  .done { text-align: center; padding: 40px 20px; }
+  .done h2 { font-size: 24px; margin: 0 0 6px; }
+  .done .big { font-size: 52px; font-weight: 700; color: var(--good); line-height: 1; margin: 18px 0 6px; font-variant-numeric: tabular-nums; }
+  .done p { color: var(--dim); font-size: 14px; line-height: 1.6; max-width: 460px; margin: 8px auto; }
+  .weak { text-align: left; max-width: 460px; margin: 22px auto 0; }
+  .weak li { font-size: 13.5px; color: var(--dim); margin: 5px 0; }
+  .weak li b { color: var(--text); }
+
+  footer { color: var(--dim); font-size: 11.5px; margin-top: 22px; line-height: 1.6; }
+  footer a { color: var(--accent); }
+  kbd {
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 4px;
+    padding: 1px 5px; font-size: 11px; font-family: ui-monospace, monospace;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Synapse <span>/ AI terms drill</span></h1>
+    <div class="sub" id="sub">22 terms</div>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="btnSound">sound: on</button>
+    <button class="iconbtn" id="btnReset">reset</button>
+  </header>
+
+  <div class="meters">
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="stat"><b id="mastered">0</b>/<span id="total">22</span> mastered</div>
+    <div class="stat hot">streak <b id="streak">0</b></div>
+  </div>
+
+  <div id="stage"></div>
+
+  <footer>
+    <kbd>1</kbd>–<kbd>4</kbd> to answer &nbsp;·&nbsp; <kbd>Enter</kbd> to continue &nbsp;·&nbsp; progress saves automatically<br>
+    Companion to <a href="index.html">Chromaneuratin</a> — built by Tehillah.
+    A term is <em>mastered</em> after three correct answers in a row; a wrong answer sends it back.
+  </footer>
+
+</div>
+
+<script>
+/* ============================================================
+   THE DECK
+   d   = short definition (used as a multiple-choice option)
+   img = the picture to remember it by
+   why = why it matters / the exam trap
+   ============================================================ */
+const CARDS = [
+  { t: 'Neuron',
+    d: 'A unit that adds up its inputs and fires only if the total passes a threshold.',
+    img: 'A person in a room: a hundred wires in, one wire out. They add up the nudges and fire only if the total clears the line they drew.',
+    why: 'Two jobs, not one: it SUMS, then it COMPARES to a threshold.' },
+
+  { t: 'Threshold',
+    d: 'The level the summed input must exceed before anything comes out at all.',
+    img: 'The line drawn on the floor. Under it, silence — no matter how many wires are buzzing.',
+    why: 'This is what makes a neuron a decision rather than a pipe. Without it you just have addition.' },
+
+  { t: 'Synapse (weight)',
+    d: 'The connection between two neurons, carrying a strength — a number.',
+    img: 'A volume knob on one specific wire. Turn it down and the sender can shout all it likes; the receiver barely registers it.',
+    why: '"Synapse" is the biology word, "weight" is the machine-learning word. Same thing.' },
+
+  { t: 'Learning',
+    d: 'Changing the strengths of existing synapses. Nothing else.',
+    img: 'You remember today, but your brain grew no new cells overnight. Only knobs turned.',
+    why: 'No new neurons, no new wires, no new rules. The turned knob IS the memory.' },
+
+  { t: 'Distributed representation',
+    d: 'Information spread across many neurons instead of stored in any single one.',
+    img: 'Showing the brain a colour lights up a whole column of neurons — there is no one "red neuron".',
+    why: 'This is exactly why losing neurons does not delete a specific memory. It causes graceful degradation.' },
+
+  { t: 'Hebbian learning',
+    d: 'If two neurons are active at the same moment, the synapse between them strengthens.',
+    img: 'A harbour of boats on slack ropes. Two boats that bob up at the same instant tighten their rope a hair. A month later the in-sync boats are lashed together, and nobody decided it.',
+    why: 'Hebb, 1949: "neurons that fire together, wire together." The trap is timing — not just OFTEN, but SIMULTANEOUSLY.' },
+
+  { t: 'Learning rate',
+    d: 'How much a synapse strengthens on each co-firing event.',
+    img: 'Too high and the brain believes whatever it heard last — one example slams the knob to maximum and erases the previous thousand.',
+    why: 'Too low: never learns. Too high: every new example overwrites the old. Learning has to be slightly reluctant.' },
+
+  { t: 'Forgetting (decay)',
+    d: 'Unused synapses slowly lose strength. "Use it or lose it."',
+    img: 'Footpaths worn across grass. The walked ones stay clear; the one nobody used since spring is knee-high by August.',
+    why: 'Nobody removes the path — it just is not maintained. Real synapses genuinely do this.' },
+
+  { t: 'Saturation',
+    d: 'Every weight has crept to maximum, so new information has nowhere to go.',
+    img: 'A brain that never forgets ends up full — and refuses new input.',
+    why: 'The trade-off: forget too little and you saturate; forget too much and knowledge evaporates. Stability vs openness — a live problem in big AI models.' },
+
+  { t: 'Backpropagation',
+    d: 'Measure how wrong the output was, then push that error backwards to adjust every weight.',
+    img: 'A teacher marking the work and sending corrections back down the line.',
+    why: 'THE contrast with Hebb: backprop must be TOLD the right answer. Hebbian learning needs no error signal at all — only co-activity.' },
+
+  { t: 'Sparsity (connectivity)',
+    d: 'Each neuron connects to only a small fraction of the others, not to all of them.',
+    img: 'A city where every house has a private road to every other house — unbuildable. Your brain is about 0.0001% connected.',
+    why: 'TWO reasons, and exams want both: cost, and specialisation. If everything hears everything, every neuron becomes an average of the room and none gets a job.' },
+
+  { t: 'Competition (winners-take-all)',
+    d: 'Only the loudest few neurons may fire; the rest are actively silenced by neighbours.',
+    img: 'A class where the teacher only ever takes the fastest hand — except here the other hands are pushed down on purpose.',
+    why: 'Not "they failed to reach threshold" — shut down deliberately because someone was louder.' },
+
+  { t: 'Runaway dominance',
+    d: 'One neuron snowballs until it fires for every input, so the brain answers everything the same.',
+    img: 'The kid who answers every question. Six months on, nobody else in the room can do a thing.',
+    why: 'Hebb causes it: winning makes it stronger, stronger makes it win more. Competition is the fix. A real failure mode, not hypothetical.' },
+
+  { t: 'Two pathways',
+    d: 'Colour and brightness travel as separate parallel channels.',
+    img: 'A black-and-white photo still reads perfectly — brightness channel intact, colour channel silent.',
+    why: 'The counter-intuitive bit: a brain whose answers are all grey still needs mostly COLOUR neurons, because you cannot know how bright green looks until you know it is green. Green counts ~6x more than blue to a human eye.' },
+
+  { t: 'Graceful degradation',
+    d: 'Damage makes it worse, but it does not crash.',
+    img: 'Kill 95% of the neurons and it still answers — badly. Delete 95% of ordinary software and it throws an error and dies.',
+    why: 'Follows directly from distributed representation: no single neuron holds a whole answer.' },
+
+  { t: 'Lesion',
+    d: 'Deliberately disabling neurons to see what the rest can still manage.',
+    img: 'The damage slider. Also a real experimental method in neuroscience.',
+    why: 'It is a measurement technique, not just vandalism — it tells you where knowledge is stored.' },
+
+  { t: 'Regression to the mean',
+    d: 'Averaging many outputs together pulls the answer toward the middle, flattening extremes.',
+    img: 'Asked for pure blue — almost black in truth — the brain returns a middling grey. It knows blue is darkish but will not commit.',
+    why: 'The fix is FEWER neurons firing at once, not more training. More training would never have fixed it, because the flaw is in the averaging.' },
+
+  { t: 'Confidence',
+    d: 'How strongly the brain agrees with itself about an answer.',
+    img: 'A luminance brain reports 0% confidence — because confidence describes hue, and every answer it gives is grey. Grey has no hue.',
+    why: 'A metric can be meaningless for a task. Knowing when a number does not apply is part of reading results honestly.' },
+
+  { t: 'Hyperparameter',
+    d: 'A setting you choose before training, which training itself never changes.',
+    img: 'Number of neurons, learning rate, connectivity, fire fraction, forgetting rate — the dials on the outside of the box.',
+    why: 'Contrast with WEIGHTS, which are exactly what training does change.' },
+
+  { t: 'Seed',
+    d: 'The number fixing the random starting wiring, so a run can be repeated exactly.',
+    img: 'Same seed, identical twin. Different seed, a different individual with the same upbringing.',
+    why: 'It is what makes an experiment repeatable — the difference between a result and an anecdote.' },
+
+  { t: 'Diminishing returns',
+    d: 'Eight times the neurons gives nowhere near eight times the performance.',
+    img: '32 neurons to 256 barely moves the score.',
+    why: 'Once you have enough capacity, capacity stops being the bottleneck. Something else is.' },
+
+  { t: 'Layer',
+    d: 'A group of neurons occupying the same stage of the network.',
+    img: 'Input (the colour shown), hidden (the thinking neurons), output (the answer).',
+    why: 'The hidden layer is where the work happens — it is "hidden" only because you see neither end of it.' }
+];
+
+/* True/false statements aimed at the specific things people get wrong. */
+const TRAPS = [
+  { s: 'Two neurons that both fire a lot, but never at the same moment, will still strengthen their synapse.', a: false, c: 'Hebbian learning' },
+  { s: 'Hebbian learning needs to be told the correct answer in order to work.', a: false, c: 'Backpropagation' },
+  { s: 'Brains are wired sparsely purely to save space — dense wiring would otherwise work better.', a: false, c: 'Sparsity (connectivity)' },
+  { s: 'A brain that never forgets anything ends up unable to take in new information.', a: true, c: 'Saturation' },
+  { s: 'Learning adds new connections between neurons that were not previously linked.', a: false, c: 'Learning' },
+  { s: 'A puzzle whose every answer is grey still needs mostly colour neurons.', a: true, c: 'Two pathways' },
+  { s: 'Neurons that do not fire simply failed to reach their threshold.', a: false, c: 'Competition (winners-take-all)' },
+  { s: 'Destroying 90% of a trained network makes it fail with an error.', a: false, c: 'Graceful degradation' },
+  { s: 'If a brain keeps answering with middling values instead of extremes, the answer is to train it for longer.', a: false, c: 'Regression to the mean' },
+  { s: 'The learning rate is a hyperparameter.', a: true, c: 'Hyperparameter' },
+  { s: 'Doubling the number of neurons roughly doubles performance.', a: false, c: 'Diminishing returns' },
+  { s: 'Changing the seed changes what the brain is capable of learning.', a: false, c: 'Seed' }
+];
+
+/* ============================================================
+   STATE  —  Leitner levels: 0..3, mastered at 3.
+   ============================================================ */
+const KEY = 'synapse-drill-v1';
+const MASTER = 3;
+let st = load();
+
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY));
+    if (raw && raw.lv && raw.lv.length === CARDS.length) return raw;
+  } catch (e) {}
+  return { lv: CARDS.map(() => 0), seen: CARDS.map(() => 0), miss: CARDS.map(() => 0),
+           streak: 0, best: 0, asked: 0, right: 0, sound: true };
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
+
+const $ = id => document.getElementById(id);
+let current = null, lastIdx = -1;
+
+/* ---- little WebAudio blips, so there are no asset files ---- */
+let actx = null;
+function blip(freqs, dur) {
+  if (!st.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    freqs.forEach((f, i) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      const t = actx.currentTime + i * dur * 0.7;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.11, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+    });
+  } catch (e) {}
+}
+const sndGood = () => blip([660, 880], 0.13);
+const sndBad  = () => blip([200, 150], 0.18);
+const sndWin  = () => blip([523, 659, 784, 1047], 0.16);
+
+/* ---- helpers ---- */
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const norm = s => s.toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z ]/g, '').trim();
+
+function masteredCount() { return st.lv.filter(l => l >= MASTER).length; }
+
+function paintMeters() {
+  const prog = st.lv.reduce((s, l) => s + Math.min(l, MASTER), 0) / (MASTER * CARDS.length);
+  $('barFill').style.width = (prog * 100) + '%';
+  $('mastered').textContent = masteredCount();
+  $('streak').textContent = st.streak;
+  $('btnSound').textContent = 'sound: ' + (st.sound ? 'on' : 'off');
+}
+
+/* ---- choose the next card: lowest level first, never twice running ---- */
+function nextCard() {
+  let pool = CARDS.map((c, i) => i).filter(i => st.lv[i] < MASTER);
+  if (!pool.length) return null;
+  if (pool.length > 1) pool = pool.filter(i => i !== lastIdx);
+  const lo = Math.min(...pool.map(i => st.lv[i]));
+  const low = pool.filter(i => st.lv[i] === lo);
+  return pick(low);
+}
+
+/* ---- build a question, harder as the level rises ---- */
+function makeQuestion(idx) {
+  const card = CARDS[idx], lv = st.lv[idx];
+  const kinds = [];
+  const trap = TRAPS.filter(t => t.c === card.t);
+  if (lv === 0) { kinds.push('def2term', 'img2term'); }
+  else if (lv === 1) { kinds.push('term2def', 'img2term'); if (trap.length) kinds.push('trap'); }
+  else { kinds.push('type'); if (trap.length) kinds.push('trap'); kinds.push('term2def'); }
+  const kind = pick(kinds);
+
+  const others = shuffle(CARDS.filter((_, i) => i !== idx)).slice(0, 3);
+
+  if (kind === 'trap') {
+    const t = pick(trap);
+    return { idx, kind, label: 'True or false',
+      prompt: t.s, small: true,
+      opts: [{ txt: 'True', ok: t.a === true }, { txt: 'False', ok: t.a === false }] };
+  }
+  if (kind === 'type') {
+    return { idx, kind, label: 'Name it — no options',
+      prompt: card.d, small: true, hint: 'Type the term. Close spelling counts.', typed: true };
+  }
+  if (kind === 'term2def') {
+    return { idx, kind, label: 'Which definition is right?',
+      prompt: card.t,
+      opts: shuffle([{ txt: card.d, ok: true }, ...others.map(o => ({ txt: o.d, ok: false }))]) };
+  }
+  if (kind === 'img2term') {
+    return { idx, kind, label: 'Which term does this picture belong to?',
+      prompt: card.img, small: true,
+      opts: shuffle([{ txt: card.t, ok: true }, ...others.map(o => ({ txt: o.t, ok: false }))]) };
+  }
+  return { idx, kind, label: 'Which term is being described?',
+    prompt: card.d, small: true,
+    opts: shuffle([{ txt: card.t, ok: true }, ...others.map(o => ({ txt: o.t, ok: false }))]) };
+}
+
+/* ---- render ---- */
+function render() {
+  paintMeters();
+  const idx = nextCard();
+  if (idx === null) return renderDone();
+  lastIdx = idx;
+  current = makeQuestion(idx);
+  const q = current, card = CARDS[idx];
+
+  let html = '<div class="card">'
+    + '<div class="kind">' + q.label + ' &nbsp;·&nbsp; level ' + st.lv[idx] + '/' + MASTER + '</div>'
+    + '<p class="prompt' + (q.small ? ' small' : '') + '">' + esc(q.prompt) + '</p>';
+
+  if (q.typed) {
+    html += '<div class="hint">' + q.hint + '</div>'
+      + '<input type="text" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="type the term, then Enter">';
+  } else {
+    html += '<div class="opts">' + q.opts.map((o, i) =>
+      '<button class="opt" data-i="' + i + '"><span class="num">' + (i + 1) + '</span><span>' + esc(o.txt) + '</span></button>'
+    ).join('') + '</div>';
+  }
+
+  html += '<div class="fb" id="fb"></div></div>';
+  $('stage').innerHTML = html;
+
+  if (q.typed) { const el = $('ans'); el.focus();
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') answerTyped(el.value); });
+  } else {
+    document.querySelectorAll('.opt').forEach(b =>
+      b.addEventListener('click', () => answerChoice(+b.dataset.i)));
+  }
+}
+
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function answerChoice(i) {
+  if (!current || current.done) return;
+  const opts = document.querySelectorAll('.opt');
+  const ok = current.opts[i].ok;
+  opts.forEach((b, j) => {
+    b.disabled = true;
+    if (current.opts[j].ok) b.classList.add('right');
+    else if (j === i) b.classList.add('wrong');
+  });
+  finish(ok);
+}
+
+function answerTyped(val) {
+  if (!current || current.done) return;
+  const card = CARDS[current.idx];
+  const ok = norm(val) === norm(card.t) || (norm(val).length > 3 && norm(card.t).startsWith(norm(val)));
+  $('ans').disabled = true;
+  finish(ok);
+}
+
+function finish(ok) {
+  current.done = true;
+  const idx = current.idx, card = CARDS[idx];
+
+  st.seen[idx]++; st.asked++;
+  if (ok) {
+    st.right++; st.streak++; st.lv[idx] = Math.min(MASTER, st.lv[idx] + 1);
+    if (st.streak > st.best) st.best = st.streak;
+    sndGood();
+  } else {
+    st.miss[idx]++; st.streak = 0; st.lv[idx] = Math.max(0, st.lv[idx] - 1);
+    sndBad();
+  }
+  save(); paintMeters();
+
+  const justMastered = ok && st.lv[idx] === MASTER;
+  const fb = $('fb');
+  fb.className = 'fb show';
+  fb.innerHTML =
+    '<div class="verdict ' + (ok ? 'ok' : 'no') + '">'
+      + (ok ? (justMastered ? 'Correct — ' + esc(card.t) + ' mastered.' : 'Correct.')
+            : 'Not quite — it is ' + esc(card.t) + '.')
+    + '</div>'
+    + '<div class="lbl">Definition</div><div class="body">' + esc(card.d) + '</div>'
+    + '<div class="lbl">Picture it</div><div class="body pic">' + esc(card.img) + '</div>'
+    + '<div class="lbl">Why it matters</div><div class="body">' + esc(card.why) + '</div>'
+    + '<button class="next" id="btnNext">' + (ok ? 'Next' : 'Got it — next') + '</button>';
+  $('btnNext').focus();
+  $('btnNext').addEventListener('click', render);
+}
+
+function renderDone() {
+  sndWin();
+  const acc = st.asked ? Math.round(100 * st.right / st.asked) : 0;
+  const hard = CARDS.map((c, i) => ({ t: c.t, m: st.miss[i] }))
+    .filter(x => x.m > 0).sort((a, b) => b.m - a.m).slice(0, 5);
+  $('stage').innerHTML = '<div class="card done">'
+    + '<h2>All ' + CARDS.length + ' terms mastered</h2>'
+    + '<div class="big">' + acc + '%</div>'
+    + '<p>accuracy across ' + st.asked + ' questions &nbsp;·&nbsp; best streak ' + st.best + '</p>'
+    + (hard.length
+        ? '<div class="weak"><div class="lbl" style="font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin-bottom:6px">Cost you the most</div><ul style="margin:0;padding-left:18px">'
+          + hard.map(h => '<li><b>' + esc(h.t) + '</b> — missed ' + h.m + (h.m === 1 ? ' time' : ' times') + '</li>').join('')
+          + '</ul><p style="margin-top:14px">Those are the ones to look at the night before. Everything else is in.</p></div>'
+        : '<p>Straight through without a single miss.</p>')
+    + '<button class="next" style="margin-top:24px" onclick="hardReset()">Go again</button>'
+    + '</div>';
+}
+
+function hardReset() {
+  const snd = st.sound;
+  st = { lv: CARDS.map(() => 0), seen: CARDS.map(() => 0), miss: CARDS.map(() => 0),
+         streak: 0, best: 0, asked: 0, right: 0, sound: snd };
+  save(); render();
+}
+
+/* ---- keyboard ---- */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Enter' && $('btnNext')) { e.preventDefault(); render(); return; }
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= 4 && current && !current.done && !current.typed) {
+    const b = document.querySelector('.opt[data-i="' + (n - 1) + '"]');
+    if (b) b.click();
+  }
+});
+
+$('btnSound').addEventListener('click', () => { st.sound = !st.sound; save(); paintMeters(); });
+$('btnReset').addEventListener('click', () => { if (confirm('Reset all progress?')) hardReset(); });
+
+$('total').textContent = CARDS.length;
+$('sub').textContent = CARDS.length + ' terms · ' + TRAPS.length + ' trap questions';
+render();
+</script>
+</body>
+</html>
